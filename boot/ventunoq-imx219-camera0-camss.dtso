@@ -1,0 +1,34 @@
+// SPDX-License-Identifier: BSD-3-Clause
+/*
+ * Second-stage overlay, applied ONLY to the successful Camera0 sensor test.
+ * Target: VENTUNO Q, Ubuntu kernel 6.8.0-1080-qcom.
+ * Keep the installed QCS8300 CAMSS resources and add its input connection.
+ * Receiver lane numbering follows Qualcomm's tested Monza camera overlay
+ * and the CAMSS lane programming in Ubuntu linux-qcom 6.8.0-1080.85.
+ * This stage checks media graph registration before attempting a stream.
+ */
+/dts-v1/;
+/plugin/;
+
+&{/soc@0/cci@ac13000} {
+    // The installed CCI driver uses timings calculated for 37.5 MHz.
+    assigned-clocks = <&camcc 4>;
+    assigned-clock-rates = <37500000>;
+};
+
+&{/soc@0/cci@ac13000/i2c-bus@0/sensor@10/port/endpoint} {
+    remote-endpoint = <&imx219_camss_camera0_ep>;
+};
+
+&{/soc@0/isp@ac7a000} {
+    vdda-phy-supply = <&vreg_l4a>;
+    vdda-pll-supply = <&vreg_l5a>;
+    status = "okay";
+};
+
+&{/soc@0/isp@ac7a000/ports/port@0} {
+    imx219_camss_camera0_ep: endpoint {
+        data-lanes = <0 1>;
+        remote-endpoint = <&imx219_camera0_ep>;
+    };
+};

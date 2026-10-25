@@ -1,0 +1,8 @@
+{
+  "camera_url": "http://msgpack-rpc-router:8088",
+  "confidence": 0.5,
+  "max_inferences_per_second": 5,
+  "preview_fps": 10,
+  "manage_camera": true,
+  "control_socket": "/dev/ventuno-imx219-control.sock"
+}

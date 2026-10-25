@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>IMX219 · Objectdetectie</title><link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="header">
+      <div class="brand"><span class="brand-icon" aria-hidden="true">◉</span><div><p class="eyebrow">VENTUNO Q · CAMERA0</p><h1>Objectdetectie</h1></div></div>
+      <span class="connection" id="connection"><i></i><span>Verbinden</span></span>
+    </header>
+    <section class="intro"><div><h2>Live kijken. Slim herkennen.</h2><p>Het livebeeld loopt door terwijl de camera objecten herkent.</p></div><span class="resolution">FULL HD <b>1920 × 1080</b></span></section>
+    <div class="workspace">
+      <section class="viewer" aria-label="Camerabeeld">
+        <div class="viewer-top"><span><i class="dot"></i> IMX219</span><div class="view-modes" aria-label="Beeldweergave"><button id="mode-live" aria-pressed="true">Livebeeld</button><button id="mode-analysis" aria-pressed="false">Met kaders</button></div><span id="frame-label">Wachten op beeld</span></div>
+        <div class="stage" id="stage">
+          <canvas id="view" width="1920" height="1080" aria-label="Live camerabeeld"></canvas>
+          <div class="placeholder" id="placeholder"><span class="placeholder-icon">⌖</span><h3>Camera wordt verbonden</h3><p>Het livebeeld verschijnt hier zodra de camerabron beschikbaar is.</p></div>
+          <div class="image-status" id="image-status" hidden></div>
+        </div>
+        <div class="analysis-strip"><canvas id="analysis" width="960" height="540" aria-label="Meest recente herkenningsbeeld met bijbehorende kaders"></canvas><div><p class="eyebrow">LAATSTE HERKENNING</p><p id="analysis-message">De eerste analyse verschijnt hier.</p><small>De kaders horen bij dit beeld. Het livebeeld erboven wordt apart ververst.</small></div></div>
+        <div class="viewer-bottom"><span id="message" role="status">Wachten op de camerabron…</span><button id="save" class="text-button" disabled>Bewaar beeld ↗</button></div>
+      </section>
+      <aside class="sidebar">
+        <section class="panel picture-controls" aria-labelledby="picture-title">
+          <div class="panel-title"><h3 id="picture-title">Beeld</h3><button id="picture-reset" class="toggle-button" disabled>Herstellen</button></div>
+          <label for="brightness">Helderheid <output id="brightness-value" for="brightness">100%</output></label>
+          <input id="brightness" type="range" min="50" max="150" step="1" value="100" disabled>
+          <div class="range-labels"><span>Donkerder</span><span>Lichter</span></div>
+          <label for="contrast">Contrast <output id="contrast-value" for="contrast">100%</output></label>
+          <input id="contrast" type="range" min="50" max="150" step="1" value="100" disabled>
+          <div class="range-labels"><span>Zachter</span><span>Sterker</span></div>
+          <p class="picture-note">Voor livebeeld én herkenning. 100% is het afgestemde beeldprofiel.</p>
+          <p id="picture-message" class="picture-message" role="status">Instellingen ophalen…</p>
+        </section>
+        <section class="panel controls"><p class="eyebrow">INSTELLINGEN</p><div class="panel-title"><h3>Herkenning</h3><button class="toggle-button" id="toggle" aria-pressed="true">Pauzeren</button></div>
+          <label for="confidence">Detectiedrempel <output id="confidence-value">50%</output></label>
+          <input id="confidence" type="range" min="10" max="95" step="5" value="50">
+          <div class="range-labels"><span>Meer objecten</span><span>Meer zekerheid</span></div>
+          <div class="metric-grid"><div><span>Gevonden</span><strong id="count">—</strong></div><div><span>Inferentie</span><strong id="latency">—</strong></div></div><p class="preview-metric">Leeftijd livebeeld <strong id="preview-age">—</strong></p>
+        </section>
+        <section class="panel results"><div class="panel-title"><h3>Gevonden objecten</h3><span class="small-badge" id="result-count">0</span></div><ul id="objects" aria-live="polite"></ul><p class="empty" id="empty">Zodra een object wordt herkend, verschijnt het hier.</p></section>
+        <section class="model-info"><span class="eyebrow">ACTIEF MODEL</span><p id="model">Wordt geladen…</p><small id="model-size">Verwerking op de Ventuno Q</small></section>
+      </aside>
+    </div>
+    <footer><span>IMX219 · Raspberry Pi Camera Module 2</span><span>Beeld en detectie blijven op je eigen netwerk.</span></footer>
+  </main><script src="/app.js"></script>
+</body>
+</html>

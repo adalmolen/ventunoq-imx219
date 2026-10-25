@@ -1,0 +1,13 @@
+--- a/source/camss.c
++++ b/source/camss.c
+@@ -2792,6 +2792,10 @@
+ 	struct media_pad *pad;
+ 
+ 	while (1) {
++		/* A video node may be opened before every VFE line is ready. */
++		if (!entity || !entity->num_pads || !entity->pads)
++			return NULL;
++
+ 		pad = &entity->pads[0];
+ 		if (!(pad->flags & MEDIA_PAD_FL_SINK))
+ 			return NULL;

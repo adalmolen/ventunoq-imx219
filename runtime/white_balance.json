@@ -1,0 +1,11 @@
+{
+  "name": "IMX219 starting profile",
+  "black_level": 64,
+  "white_level": 1023,
+  "gains": {
+    "R": 1.379278582056131,
+    "G": 1.0,
+    "B": 1.8799822308094194
+  },
+  "scope": "Starting values from one matte-white-card measurement; not an absolute colour calibration or automatic white balance."
+}

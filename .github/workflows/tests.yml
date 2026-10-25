@@ -1,0 +1,25 @@
+name: Source and processing checks
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Install test dependencies
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends python3-numpy python3-pil python3-yaml build-essential device-tree-compiler
+      - name: Verify source package
+        run: /usr/bin/python3 scripts/package.py verify
+      - name: Build CPU processing library
+        run: cc -O3 -std=c11 -shared -fPIC -pthread runtime/picture_native.c -o runtime/picture_native.so
+      - name: Run tests
+        run: /usr/bin/python3 -m unittest discover -s tests -v
+      - name: Check web interface syntax
+        run: node --check app/assets/app.js
+      - name: Check shell scripts
+        run: bash -n setup.sh scripts/build.sh scripts/install-dependencies.sh scripts/test.sh
+      - name: Build release archives
+        run: /usr/bin/python3 scripts/package.py release

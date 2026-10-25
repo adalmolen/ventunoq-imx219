@@ -1,0 +1,162 @@
+// SPDX-License-Identifier: BSD-3-Clause
+/*
+ * Experimental IMX219 Camera0 SENSOR-PROBE overlay for VENTUNO Q.
+ * Target examined: Ubuntu 24.04.4, 6.8.0-1080-qcom, supplied live DTS.
+ * Camera module confirmed by user: Raspberry Pi Camera Module 2,
+ * with its onboard 24 MHz oscillator.
+ * CAMSS stays disabled: this first stage checks sensor binding, not video.
+ * Install through a separate GRUB entry after checking the boot configuration.
+ *
+ * Sensor/connector reference: Qualcomm commit
+ * 10a66404c1056d28d6f0e7bb3453ede44c79b58d.
+ * CCI0 register/IRQ/clock IDs are cross-checked with the supplied live DTS.
+ * Clock names follow the installed tree (cpas_ahb), not the newer reference.
+ */
+/dts-v1/;
+/plugin/;
+
+&{/clocks} {
+    imx219_camera0_clk: imx219-camera0-clk {
+        compatible = "fixed-clock";
+        #clock-cells = <0>;
+        clock-frequency = <24000000>;
+        clock-output-names = "imx219-camera0-24m";
+    };
+};
+
+&tlmm {
+    imx219_camera0_reset: imx219-camera0-reset-state {
+        function = "gpio";
+        pins = "gpio64";
+        drive-strength = <2>;
+        bias-disable;
+    };
+};
+
+&{/soc@0} {
+    #address-cells = <2>;
+    #size-cells = <2>;
+    imx219_camera0_cci: cci@ac13000 {
+        compatible = "qcom,qcs8300-cci", "qcom,msm8996-cci";
+        reg = <0 0x0ac13000 0 0x1000>;
+        interrupt-parent = <&intc>;
+        interrupts = <0 460 1>;
+        // camcc index 13: CPAS AHB; index 4: CCI0; GDSC index 0: TITAN_TOP.
+        clocks = <&camcc 13>, <&camcc 4>;
+        clock-names = "cpas_ahb", "cci";
+        power-domains = <&camcc 0>;
+        pinctrl-0 = <&cci0_0_default>;
+        pinctrl-1 = <&cci0_0_sleep>;
+        pinctrl-names = "default", "sleep";
+        #address-cells = <1>;
+        #size-cells = <0>;
+        status = "okay";
+
+        i2c-bus@0 {
+            reg = <0>;
+            clock-frequency = <400000>;
+            #address-cells = <1>;
+            #size-cells = <0>;
+
+            imx219_camera0: sensor@10 {
+                compatible = "sony,imx219";
+                reg = <0x10>;
+                clocks = <&imx219_camera0_clk>;
+                // Matches Qualcomm's tested Monza IMX219 definition.
+                reset-gpios = <&tlmm 64 0>;
+                pinctrl-names = "default";
+                pinctrl-0 = <&imx219_camera0_reset>;
+                status = "okay";
+                port {
+                    // The sensor probe does not need a receiver peer.
+                    // Add the CAMSS link in the subsequent streaming stage.
+                    imx219_camera0_ep: endpoint {
+                        clock-lanes = <0>;
+                        data-lanes = <1 2>;
+                        link-frequencies = /bits/ 64 <456000000>;
+                    };
+                };
+            };
+        };
+    };
+};
+
+// Disable the vendor camera nodes so the same registers/IRQs/GPIOs are not
+// claimed by camera_qcs8300 while the upstream CCI0/sensor driver is probing.
+// The fan/LED bit-banged CCI1 bus and all non-camera devices are preserved.
+
+&{/soc@0/qcom,cam-cdm-intf} { status = "disabled"; };
+
+&{/soc@0/qcom,cam-cpas} { status = "disabled"; };
+
+&{/soc@0/qcom,cam-icp} { status = "disabled"; };
+
+&{/soc@0/qcom,cam-isp} { status = "disabled"; };
+
+&{/soc@0/qcom,cam-req-mgr} { status = "disabled"; };
+
+&{/soc@0/qcom,cam-res-mgr} { status = "disabled"; };
+
+&{/soc@0/qcom,cam-sync} { status = "disabled"; };
+
+&{/soc@0/qcom,cci0@ac13000} { status = "disabled"; };
+
+&{/soc@0/qcom,cci1@ac14000} { status = "disabled"; };
+
+&{/soc@0/qcom,cci2@ac15000} { status = "disabled"; };
+
+&{/soc@0/qcom,csid-lite0} { status = "disabled"; };
+
+&{/soc@0/qcom,csid-lite1} { status = "disabled"; };
+
+&{/soc@0/qcom,csid-lite2} { status = "disabled"; };
+
+&{/soc@0/qcom,csid-lite3} { status = "disabled"; };
+
+&{/soc@0/qcom,csid-lite4} { status = "disabled"; };
+
+&{/soc@0/qcom,csid0} { status = "disabled"; };
+
+&{/soc@0/qcom,csid1} { status = "disabled"; };
+
+&{/soc@0/qcom,csiphy0@ac9c000} { status = "disabled"; };
+
+&{/soc@0/qcom,csiphy1@ac9e000} { status = "disabled"; };
+
+&{/soc@0/qcom,csiphy2@aca0000} { status = "disabled"; };
+
+&{/soc@0/qcom,icp} { status = "disabled"; };
+
+&{/soc@0/qcom,ife-lite0} { status = "disabled"; };
+
+&{/soc@0/qcom,ife-lite1} { status = "disabled"; };
+
+&{/soc@0/qcom,ife-lite2} { status = "disabled"; };
+
+&{/soc@0/qcom,ife-lite3} { status = "disabled"; };
+
+&{/soc@0/qcom,ife-lite4} { status = "disabled"; };
+
+&{/soc@0/qcom,ife0} { status = "disabled"; };
+
+&{/soc@0/qcom,ife1} { status = "disabled"; };
+
+&{/soc@0/qcom,ipe0} { status = "disabled"; };
+
+&{/soc@0/qcom,rt-cdm0} { status = "disabled"; };
+
+&{/soc@0/qcom,rt-cdm1} { status = "disabled"; };
+
+&{/soc@0/qcom,rt-cdm2} { status = "disabled"; };
+
+&{/soc@0/qcom,rt-cdm3} { status = "disabled"; };
+
+&{/soc@0/qcom,sfe-lite0} { status = "disabled"; };
+
+&{/soc@0/qcom,sfe-lite1} { status = "disabled"; };
+
+&{/soc@0/qcom,tpg13@acac000} { status = "disabled"; };
+
+&{/soc@0/qcom,tpg14@acad000} { status = "disabled"; };
+
+&{/soc@0/qcom,tpg15@acae000} { status = "disabled"; };

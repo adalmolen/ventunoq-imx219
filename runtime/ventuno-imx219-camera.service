@@ -1,0 +1,24 @@
+[Unit]
+Description=Ventuno Q IMX219 camera voor Arduino App Lab
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /opt/ventuno-imx219-v2/camera_manager.py --uid=@UID@
+WorkingDirectory=/opt/ventuno-imx219-v2
+Environment=LC_ALL=C
+RuntimeDirectory=ventuno-imx219
+RuntimeDirectoryPreserve=yes
+StateDirectory=ventuno-imx219-v2
+StateDirectoryMode=0750
+UMask=0027
+ProtectSystem=full
+PrivateTmp=true
+KillMode=mixed
+SendSIGKILL=no
+TimeoutStopSec=20s
+Restart=no
+
+[Install]
+WantedBy=multi-user.target

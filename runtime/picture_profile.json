@@ -1,0 +1,12 @@
+{
+  "schema": 3,
+  "exposure_lines": 1600,
+  "linear_brightness": 3.5,
+  "saturation": 1.25,
+  "red_tint": 1.06,
+  "blue_tint": 0.94,
+  "contrast": 1.18,
+  "black_point": 0.012,
+  "noise_strength": 1.0,
+  "threads": 1
+}
