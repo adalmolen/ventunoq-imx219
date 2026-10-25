@@ -23,7 +23,7 @@ def user_home():
 def run(args, timeout=12):
     result = subprocess.run(args, capture_output=True, text=True, timeout=timeout)
     if result.returncode:
-        raise RuntimeError(f'{args[0]} mislukt: {result.stderr.strip() or result.stdout.strip()}')
+        raise RuntimeError(f'{args[0]} failed: {result.stderr.strip() or result.stdout.strip()}')
     return result.stdout
 
 
@@ -33,17 +33,17 @@ def boot_id():
 
 def preflight():
     if os.uname().sysname != 'Linux' or os.uname().release != KERNEL:
-        raise RuntimeError(f'Dit pakket vereist de geteste Ventuno-kernel {KERNEL}.')
+        raise RuntimeError(f'This package requires the tested Ventuno kernel {KERNEL}.')
     if os.geteuid() != 0:
-        raise RuntimeError('Start dit hardwarecommando met sudo python3.')
+        raise RuntimeError('Run this hardware command with sudo python3.')
     if 'ventuno_imx219_stability=1' not in Path('/proc/cmdline').read_text().split():
-        raise RuntimeError('Start eerst de bestaande ventuno-imx219-stability-testboot.')
+        raise RuntimeError('Boot the existing ventuno-imx219-stability test entry first.')
     loaded = Path('/sys/module/qcom_camss/srcversion')
     if not loaded.exists() or loaded.read_text().strip() != SRCVERSION:
-        raise RuntimeError('De geteste CAMSS-stability-module is niet geladen. Er wordt niets verwisseld.')
+        raise RuntimeError('The tested CAMSS stability module is not loaded. No module will be replaced.')
     for command in ['media-ctl', 'v4l2-ctl', 'fuser']:
         if not shutil.which(command):
-            raise RuntimeError(f'{command} ontbreekt; hostpakketten: v4l-utils en psmisc.')
+            raise RuntimeError(f'{command} is missing; host packages: v4l-utils and psmisc.')
     return {'boot_id': boot_id(), 'kernel': KERNEL, 'loaded_srcversion': SRCVERSION}
 
 
@@ -54,7 +54,7 @@ class CameraLock:
             fcntl.flock(self.file, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
             self.file.close()
-            raise RuntimeError('Er loopt al een FHD-test of camerabrug.') from None
+            raise RuntimeError('An FHD test or camera bridge is already running.') from None
         return self
 
     def __exit__(self, *exc):
@@ -65,19 +65,19 @@ def parse_format(text):
     def number(pattern):
         match = re.search(pattern, text)
         if not match:
-            raise ValueError('Onvolledige V4L2-formaatuitvoer')
+            raise ValueError('Incomplete V4L2 format output')
         return int(match[1])
     wh = re.search(r'Width/Height\s*:\s*(\d+)/(\d+)', text)
     if not wh or tuple(map(int, wh.groups())) != (WIDTH, HEIGHT):
-        raise ValueError('De driver heeft geen 1920x1080 ingesteld.')
+        raise ValueError('The driver did not set 1920x1080.')
     if not re.search(r"Pixel Format\s*:\s*'pRAA'", text):
-        raise ValueError('De driver heeft geen pRAA / packed RGGB10 ingesteld.')
+        raise ValueError('The driver did not set pRAA / packed RGGB10.')
     if number(r'Number of planes\s*:\s*(\d+)') != 1:
-        raise ValueError('Alleen een RAW10-vlak wordt ondersteund.')
+        raise ValueError('Only a single RAW10 plane is supported.')
     stride = number(r'Bytes per Line\s*:\s*(\d+)')
     size = number(r'Size Image\s*:\s*(\d+)')
     if stride < WIDTH * 5 // 4 or size != stride * HEIGHT:
-        raise ValueError('Onverwachte stride of framegrootte.')
+        raise ValueError('Unexpected stride or frame size.')
     return {'width': WIDTH, 'height': HEIGHT, 'pixel_format': 'pRAA',
             'bytes_per_line': stride, 'size_image': size}
 
@@ -89,7 +89,7 @@ def sensor_entity(driver=Path('/sys/bus/i2c/drivers/imx219')):
                if entry.is_symlink() and re.fullmatch(r'[0-9]+-0010', entry.name)
                and (entry / 'of_node').resolve().as_posix().endswith(expected)]
     if len(matches) != 1:
-        raise RuntimeError('Niet precies één gekoppelde IMX219 op Camera0 gevonden.')
+        raise RuntimeError('Expected exactly one bound IMX219 on Camera0.')
     return 'imx219 ' + matches[0]
 
 
@@ -103,16 +103,16 @@ def configure(output):
                 r'^bus info\s+platform:ac7a000\.isp$', topology, re.M):
             candidates.append(str(device))
     if len(candidates) != 1:
-        raise RuntimeError('Niet precies een CAMSS voor ac7a000.isp gevonden.')
+        raise RuntimeError('Expected exactly one CAMSS for ac7a000.isp.')
     media = candidates[0]
     video = run(['media-ctl', '-d', media, '-e', 'msm_vfe0_video0']).strip()
     sensor_name = sensor_entity()
     sensor = run(['media-ctl', '-d', media, '-e', sensor_name]).strip()
     if not Path(video).is_char_device() or not Path(sensor).is_char_device():
-        raise RuntimeError('De bekende Camera0-route ontbreekt.')
+        raise RuntimeError('The expected Camera0 route is missing.')
     busy = subprocess.run(['fuser', video, sensor], capture_output=True, text=True)
     if busy.returncode != 1 or busy.stdout.strip():
-        raise RuntimeError('Camera in gebruik of niet controleerbaar. Stop andere camera-apps eerst.\n' + busy.stdout + busy.stderr)
+        raise RuntimeError('The camera is busy or its availability cannot be checked. Stop other camera apps first.\n' + busy.stdout + busy.stderr)
     run(['media-ctl', '-d', media, '-l',
          '"msm_csiphy0":1->"msm_csid0":0[1], "msm_csid0":1->"msm_vfe0_rdi0":0[1]'])
     pads = [f'"{sensor_name}":0', '"msm_csiphy0":0', '"msm_csiphy0":1',
@@ -125,7 +125,7 @@ def configure(output):
     run(['v4l2-ctl', '-d', sensor, '--set-ctrl=exposure=800'])
     controls = run(['v4l2-ctl', '-d', sensor, '--list-ctrls'])
     if not re.search(r'^\s*exposure\s+.*\bvalue=800\b', controls, re.M):
-        raise RuntimeError('Belichting 800 kon niet worden bevestigd.')
+        raise RuntimeError('Exposure of 800 lines could not be confirmed.')
     (output / 'format.txt').write_text(text)
     (output / 'controls.txt').write_text(controls)
     (output / 'topology.txt').write_text(run(['media-ctl', '-d', media, '-p']))
@@ -188,4 +188,4 @@ def find_proof(explicit=None):
                 return path
         except (OSError, ValueError):
             continue
-    raise RuntimeError('Eerst capture_fhd_test.py uitvoeren: een geslaagde FHD-test in deze boot ontbreekt.')
+    raise RuntimeError('Run capture_fhd_test.py first: a successful FHD test from the current boot is required.')

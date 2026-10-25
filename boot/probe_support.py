@@ -9,7 +9,7 @@ import struct
 
 KERNEL = "6.8.0-1080-qcom"
 ENTRY_ID = "ventuno-imx219-probe"
-ENTRY_TITLE = "Ventuno Q IMX219 Camera0 sensortest"
+ENTRY_TITLE = "Ventuno Q IMX219 Camera0 sensor test"
 CCI = "/soc@0/cci@ac13000"
 SENSOR = CCI + "/i2c-bus@0/sensor@10"
 CAMSS = "/soc@0/isp@ac7a000"
@@ -18,10 +18,10 @@ CAMSS = "/soc@0/isp@ac7a000"
 def fdt_nodes(blob: bytes) -> dict[str, dict[str, bytes]]:
     """Parse properties, preserving their exact bytes for the change check."""
     if len(blob) < 40:
-        raise ValueError("DTB-header ontbreekt")
+        raise ValueError("Missing DTB header")
     header = struct.unpack_from(">10I", blob)
     if header[0] != 0xD00DFEED or header[1] > len(blob):
-        raise ValueError("Ongeldige DTB-header")
+        raise ValueError("Invalid DTB header")
     pos = header[2]
     strings = blob[header[3]:header[3] + header[8]]
     stack: list[str] = []
@@ -47,11 +47,11 @@ def fdt_nodes(blob: bytes) -> dict[str, dict[str, bytes]]:
             pass
         elif token == 9:
             if stack:
-                raise ValueError("Onvolledige DTB-boom")
+                raise ValueError("Incomplete DTB tree")
             return nodes
         else:
-            raise ValueError(f"Onbekend DTB-token: {token}")
-    raise ValueError("DTB mist eindmarkering")
+            raise ValueError(f"Unknown DTB token: {token}")
+    raise ValueError("DTB end marker is missing")
 
 
 def cells(data: bytes) -> tuple[int, ...]:
@@ -69,12 +69,12 @@ def validate_probe(before_blob: bytes, after_blob: bytes,
                    vendor_paths: set[str], *, sanitized: bool = False) -> dict:
     before, after = fdt_nodes(before_blob), fdt_nodes(after_blob)
     if b"arduino,monza" not in before["/"].get("compatible", b"").split(b"\0"):
-        raise ValueError("Dit is geen Arduino Monza/Ventuno Q device tree")
+        raise ValueError("This is not an Arduino Monza/Ventuno Q device tree")
     if CCI in before or SENSOR in before:
-        raise ValueError("CCI0/IMX219 is al aanwezig; verwacht de oorspronkelijke boot")
+        raise ValueError("CCI0/IMX219 already exists; the original boot is required")
     for path, props in before.items():
         if path not in after:
-            raise ValueError(f"Onverwacht verwijderde node: {path}")
+            raise ValueError(f"Unexpectedly removed node: {path}")
         for prop in set(props) | set(after[path]):
             if props.get(prop) == after[path].get(prop):
                 continue
@@ -88,17 +88,17 @@ def validate_probe(before_blob: bytes, after_blob: bytes,
                 and prop not in after[path]
             )
             if not allowed:
-                raise ValueError(f"Onverwachte wijziging: {path}:{prop}")
+                raise ValueError(f"Unexpected change: {path}:{prop}")
     for path in vendor_paths:
         if after[path].get("status") != b"disabled\0":
-            raise ValueError(f"Vendor-camera-node nog actief: {path}")
+            raise ValueError(f"Vendor camera node is still active: {path}")
     if after[CAMSS].get("status") != b"disabled\0":
-        raise ValueError("CAMSS moet bij de sensortest uitgeschakeld blijven")
+        raise ValueError("CAMSS must remain disabled for the sensor test")
     cci, sensor = after[CCI], after[SENSOR]
     checks = {
-        "CCI0-adres": cells(cci["reg"]) == (0, 0xAC13000, 0, 0x1000),
+        "CCI0-address": cells(cci["reg"]) == (0, 0xAC13000, 0, 0x1000),
         "CCI0-interrupt": cells(cci["interrupts"]) == (0, 460, 1),
-        "sensoradres": cells(sensor["reg"]) == (0x10,),
+        "sensor-address": cells(sensor["reg"]) == (0x10,),
         "sensor-driver": sensor["compatible"] == b"sony,imx219\0",
         "reset-pin": cells(sensor["reset-gpios"])[1:] == (64, 0),
     }
@@ -113,25 +113,25 @@ def validate_probe(before_blob: bytes, after_blob: bytes,
         SENSOR + "/port/endpoint",
     }
     if set(after) - set(before) != expected_new_nodes:
-        raise ValueError("Onverwachte toegevoegde nodes in de test-DTB")
-    checks["CCI0-klokken"] = cells(cci["clocks"]) == (
+        raise ValueError("Unexpected nodes added to the test DTB")
+    checks["CCI0-clocks"] = cells(cci["clocks"]) == (
         camcc_handle, 13, camcc_handle, 4,
     )
     checks["reset-controller"] = cells(sensor["reset-gpios"])[0] == cells(
         after[tlmm]["phandle"]
     )[0]
     _, clock = handles[cells(sensor["clocks"])[0]]
-    checks["sensorklok"] = cells(clock["clock-frequency"]) == (24000000,)
+    checks["sensor-clock"] = cells(clock["clock-frequency"]) == (24000000,)
     endpoint = after[SENSOR + "/port/endpoint"]
-    checks["datalijnen"] = cells(endpoint["data-lanes"]) == (1, 2)
-    checks["linkfrequentie"] = struct.unpack(">Q", endpoint["link-frequencies"])[0] == 456000000
-    checks["zelfstandige-sensortest"] = "remote-endpoint" not in endpoint
+    checks["data-lanes"] = cells(endpoint["data-lanes"]) == (1, 2)
+    checks["link-frequency"] = struct.unpack(">Q", endpoint["link-frequencies"])[0] == 456000000
+    checks["standalone-sensor-test"] = "remote-endpoint" not in endpoint
     for key, ok in checks.items():
         if not ok:
-            raise ValueError(f"DTB-controle mislukt: {key}")
+            raise ValueError(f"DTB verification failed: {key}")
     if sanitized and any(is_temporary_chosen_property(p)
                          for p in after.get("/chosen", {})):
-        raise ValueError("Tijdelijke gegevens van de oude boot zijn nog aanwezig")
+        raise ValueError("Temporary data from the previous boot is still present")
     return {"checks": checks, "vendor_nodes_disabled": len(vendor_paths),
             "added_nodes": sorted(set(after) - set(before)),
             "non_camera_existing_properties_preserved": True,
@@ -144,25 +144,25 @@ def make_menu(grub: str, *, loader_module: str | None = None) -> str:
     starts = [i for i, line in enumerate(lines)
               if re.match(r"^menuentry\s+['\"]Ubuntu['\"]\s", line)]
     if len(starts) != 1:
-        raise ValueError("Precies één oorspronkelijke Ubuntu-menuoptie verwacht")
+        raise ValueError("Expected exactly one original Ubuntu menu entry")
     start = starts[0]
     end = next((i for i in range(start + 1, len(lines)) if lines[i] == "}"), None)
     if end is None:
-        raise ValueError("Einde van de Ubuntu-menuoptie niet gevonden")
+        raise ValueError("End of the Ubuntu menu entry not found")
     body = lines[start + 1:end]
     linux = [i for i, line in enumerate(body) if re.match(r"\s*linux\s", line)]
     initrd = [line for line in body if re.match(r"\s*initrd\s", line)]
     if len(linux) != 1 or len(initrd) != 1:
-        raise ValueError("Ubuntu-optie moet één linux- en één initrd-regel bevatten")
+        raise ValueError("The Ubuntu entry must contain one linux line and one initrd line")
     index = linux[0]
     match = re.match(r"(\s*linux\s+)(\S+)(.*)", body[index])
     kernel_path = match[2]
     if kernel_path not in {f"/boot/vmlinuz-{KERNEL}", f"/vmlinuz-{KERNEL}"}:
-        raise ValueError(f"Ubuntu kiest een andere kernel: {kernel_path}")
+        raise ValueError(f"Ubuntu selects a different kernel: {kernel_path}")
     if not initrd[0].split()[-1].endswith(f"initrd.img-{KERNEL}"):
-        raise ValueError("Initrd past niet bij de verwachte kernel")
+        raise ValueError("The initrd does not match the expected kernel")
     if any(re.match(r"\s*devicetree\s", line) for line in body):
-        raise ValueError("Ubuntu heeft al een devicetree-opdracht; handmatig bekijken")
+        raise ValueError("Ubuntu already has a devicetree command; manual review is required")
     args = match[3]
     blacklist = re.search(r"(?<!\S)module_blacklist=([^\s]+)", args)
     if blacklist:
@@ -179,7 +179,7 @@ def make_menu(grub: str, *, loader_module: str | None = None) -> str:
     insert = [f"\tdevicetree {new_dtb}"]
     if loader_module is not None:
         if not re.fullmatch(r"[A-Za-z0-9_-]+", loader_module):
-            raise ValueError("Onverwachte naam van de GRUB-module")
+            raise ValueError("Unexpected GRUB module name")
         insert.insert(0, f"\tinsmod {loader_module}")
     body[index + 1:index + 1] = insert
     # Selecting the test must not become a permanently saved default.

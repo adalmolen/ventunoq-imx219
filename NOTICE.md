@@ -1,35 +1,35 @@
-# Licenties en herkomst
+# Licences and source attribution
 
-De projectcode wordt verspreid onder **GPL-2.0-only**; zie [LICENSE](LICENSE).
-De twee device-tree-overlays in `boot/` behouden hun **BSD-3-Clause**-licentie;
-zie de SPDX-regel in die bestanden en [de licentietekst](LICENSES/BSD-3-Clause.txt).
-Bestaande copyright- en SPDX-vermeldingen in de Linux-driver blijven geldig.
+Project code is distributed under **GPL-2.0-only**; see [LICENSE](LICENSE).
+The two device-tree overlays in `boot/` retain their **BSD-3-Clause** licence;
+see their SPDX identifiers and the [licence text](LICENSES/BSD-3-Clause.txt).
+Existing copyright notices and SPDX identifiers in the Linux driver remain applicable.
 
-## Linux CAMSS-driver
+## Linux CAMSS driver
 
-`driver/camss/` bevat de volledige gebruikte CAMSS-broncode, inclusief
-Makefile en headers, voor Ubuntu `linux-qcom 6.8.0-1080.85`.
-De oorspronkelijke Linux Foundation-, Linaro- en Qualcomm-vermeldingen zijn behouden.
-De code is gereconstrueerd uit de officiële Linux v6.8-bronnen en de Ubuntu-bronpatches.
-De herkomst en controlesommen staan in [driver/provenance.json](driver/provenance.json).
+`driver/camss/` contains the complete CAMSS source used here, including the
+Makefile and headers, for Ubuntu `linux-qcom 6.8.0-1080.85`.
+The original Linux Foundation, Linaro, and Qualcomm notices are preserved.
+The code was reconstructed from official Linux v6.8 sources and Ubuntu source patches.
+Source provenance and checksums are recorded in [driver/provenance.json](driver/provenance.json).
 
-De projectaanpassingen, gedateerd oktober 2026, staan afzonderlijk in `driver/patches/`:
+Project changes, dated October 2026, are provided separately in `driver/patches/`:
 
-- QCS8300 gebruikt de bestaande SA8775P CSI-PHY-tabel.
-- Pipeline power wordt gekoppeld aan starten/stoppen van streaming.
-- Een controle voorkomt derefereren van ontbrekende sensor-pads.
+- QCS8300 uses the existing SA8775P CSI-PHY table.
+- Pipeline power is tied to starting and stopping streaming.
+- A guard prevents dereferencing missing sensor pads.
 
-Het pipeline-power-backport is gebaseerd op Linux-commit
+The pipeline power backport is based on Linux commit
 [`164202f682030cf8702f11cb63ccbcf2a81b2e75`](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=164202f682030cf8702f11cb63ccbcf2a81b2e75).
-De originele upstream-patch en de lokale backport zijn beide opgenomen.
+Both the original upstream patch and the local backport are included.
 
-## Niet meegeleverde software
+## Software not included
 
-Arduino App Lab, Arduino Bricks, Docker, Python-pakketten en AI-modellen zijn
-externe afhankelijkheden met hun eigen licenties en voorwaarden. Dit pakket
-herdistribueert geen modelgewichten, Arduino-software-images of Ubuntu-kernelimages.
-App Lab haalt het geselecteerde model via zijn eigen voorzieningen op.
+Arduino App Lab, Arduino Bricks, Docker, Python packages, and AI models are
+external dependencies with their own licences and terms. This package does not
+redistribute model weights, Arduino software images, or Ubuntu kernel images.
+App Lab downloads the selected model through its own facilities.
 
-Arduino, VENTUNO, Raspberry Pi, Sony en Qualcomm zijn namen van hun respectieve
-rechthebbenden. Dit is een onafhankelijk communityproject, geen officieel
-ondersteund camerastuurprogramma van die fabrikanten.
+Arduino, VENTUNO, Raspberry Pi, Sony, and Qualcomm are names of their respective
+owners. This is an independent community project, not an officially supported
+camera driver from those manufacturers.

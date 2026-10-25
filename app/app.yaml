@@ -1,6 +1,6 @@
-name: Ventuno IMX219 Objectdetectie
+name: Ventuno IMX219 Object Detection
 icon: 📷
-description: Full HD IMX219-camera met livebeeld, objectdetectie en instelbare helderheid en contrast.
+description: Full HD IMX219 camera with live preview, object detection, and adjustable brightness and contrast.
 ports: []
 bricks:
 - arduino:object_detection:

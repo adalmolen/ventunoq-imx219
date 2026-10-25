@@ -17,22 +17,22 @@ LEGACY_KEYS = {'schema', 'exposure_lines', 'linear_brightness', 'saturation', 'r
 
 def validate(profile):
     if not isinstance(profile, dict) or type(profile.get('schema')) is not int:
-        raise ValueError('Onbekend beeldprofiel.')
+        raise ValueError('Unknown picture profile.')
     if profile['schema'] == 1 and set(profile) == LEGACY_KEYS:
         # During update, new code can still read the existing v1 profile.
         profile = dict(DEFAULT, **profile)
         profile.update(schema=3, contrast=1, black_point=0, noise_strength=0)
     if set(profile) != set(DEFAULT) or profile['schema'] != 3:
-        raise ValueError('Onbekend beeldprofiel.')
+        raise ValueError('Unknown picture profile.')
     bounds = {'exposure_lines': (4, 1600), 'linear_brightness': (1, 6),
               'saturation': (1, 1.8), 'red_tint': (.9, 1.1), 'blue_tint': (.9, 1.1),
               'contrast': (.5, 1.8), 'black_point': (0, .04), 'noise_strength': (0, 1), 'threads': (1, 2)}
     for name, (low, high) in bounds.items():
         value = profile[name]
         if type(value) not in (int, float) or not math.isfinite(value) or not low <= value <= high:
-            raise ValueError(f'Ongeldige beeldinstelling: {name}.')
+            raise ValueError(f'Invalid picture setting: {name}.')
     if type(profile['exposure_lines']) is not int or type(profile['threads']) is not int:
-        raise ValueError('De belichting moet een geheel aantal lijnen zijn.')
+        raise ValueError('Exposure must be a whole number of lines.')
     return dict(profile)
 
 
@@ -47,11 +47,11 @@ def apply_exposure(sensor, target, run):
     if (set(values) != {'min', 'max', 'step'} or values['step'] <= 0
             or not values['min'] <= target <= values['max']
             or (target - values['min']) % values['step']):
-        raise RuntimeError('De beeldprofielbelichting past niet binnen het huidige sensorbereik.')
+        raise RuntimeError('The picture profile exposure is outside the current sensor range.')
     run(['v4l2-ctl', '-d', sensor, f'--set-ctrl=exposure={target}'])
     actual = run(['v4l2-ctl', '-d', sensor, '--get-ctrl=exposure'])
     if not re.search(rf'^exposure:\s*{target}\s*$', actual, re.M):
-        raise RuntimeError('De beeldprofielbelichting kon niet worden teruggelezen.')
+        raise RuntimeError('The picture profile exposure could not be read back.')
 
 
 def curve(value, tint, profile):
@@ -84,20 +84,20 @@ class Look:
 
     def apply(self, image):
         if image.mode != 'RGB':
-            raise ValueError('De beeldverwerking vereist RGB.')
+            raise ValueError('Picture processing requires RGB.')
         return self.apply_array(np.asarray(image))
 
     def apply_array(self, source):
         if not isinstance(source, np.ndarray) or source.ndim != 3 or source.shape[2] != 3:
-            raise ValueError('Onverwachte RGB-buffer.')
+            raise ValueError('Unexpected RGB buffer.')
         height, width = source.shape[:2]
         if source.dtype != np.uint8 or not source.flags.c_contiguous:
-            raise ValueError('Onverwachte RGB-buffer.')
+            raise ValueError('Unexpected RGB buffer.')
         output = np.empty_like(source)
         result = self.process(source.ctypes.data, source.nbytes, output.ctypes.data,
                               output.nbytes, width, height, self.curves, 768,
                               round(self.profile['saturation'] * 256),
                               round(self.profile['noise_strength'] * 256), self.profile['threads'])
         if result:
-            raise RuntimeError(f'Native RGB-verwerking mislukt ({result}).')
+            raise RuntimeError(f'Native RGB processing failed ({result}).')
         return Image.fromarray(output)

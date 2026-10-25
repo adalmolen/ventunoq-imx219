@@ -21,33 +21,33 @@ def symbol(nodes: dict, name: str) -> tuple[str, int]:
 
 def check_probe_base(nodes: dict, vendor_paths: set[str]) -> None:
     if b"arduino,monza" not in nodes["/"]["compatible"].split(b"\0"):
-        raise ValueError("Geen Ventuno Q/Monza")
+        raise ValueError("Not a Ventuno Q/Monza")
     if nodes[CAMSS].get("status") != b"disabled\0":
-        raise ValueError("Verwacht de sensortest met uitgeschakelde CAMSS")
+        raise ValueError("Expected the sensor test with CAMSS disabled")
     if nodes[CAMSS]["compatible"] != b"qcom,qcs8300-camss\0":
-        raise ValueError("Onverwachte CAMSS-controller")
+        raise ValueError("Unexpected CAMSS controller")
     if RECEIVER_EP in nodes or "remote-endpoint" in nodes[SENSOR_EP]:
-        raise ValueError("De ontvanger is al verbonden; eerst de bestaande test bekijken")
+        raise ValueError("The receiver is already connected; review the existing test first")
     for path in vendor_paths:
         if nodes[path].get("status") != b"disabled\0":
-            raise ValueError(f"Vendor-camera-node nog actief: {path}")
+            raise ValueError(f"Vendor camera node is still active: {path}")
     _, camcc = symbol(nodes, "camcc")
     _, tlmm = symbol(nodes, "tlmm")
     cci, sensor, ep = nodes[CCI], nodes[SENSOR], nodes[SENSOR_EP]
     handles = {cells(n["phandle"])[0]: n for n in nodes.values() if "phandle" in n}
     checks = {
-        "CCI0-adres": cells(cci["reg"]) == (0, 0xAC13000, 0, 0x1000),
-        "CCI0-klokken": cells(cci["clocks"]) == (camcc, 13, camcc, 4),
+        "CCI0-address": cells(cci["reg"]) == (0, 0xAC13000, 0, 0x1000),
+        "CCI0-clocks": cells(cci["clocks"]) == (camcc, 13, camcc, 4),
         "sensor": sensor["compatible"] == b"sony,imx219\0" and cells(sensor["reg"]) == (0x10,),
         "reset": cells(sensor["reset-gpios"]) == (tlmm, 64, 0),
-        "sensorklok": cells(handles[cells(sensor["clocks"])[0]]["clock-frequency"]) == (24000000,),
-        "sensorlanes": cells(ep["data-lanes"]) == (1, 2),
-        "linkfrequentie": struct.unpack(">Q", ep["link-frequencies"]) == (456000000,),
-        "endpointsymbool": symbol(nodes, "imx219_camera0_ep")[0] == SENSOR_EP,
+        "sensor-clock": cells(handles[cells(sensor["clocks"])[0]]["clock-frequency"]) == (24000000,),
+        "sensor-lanes": cells(ep["data-lanes"]) == (1, 2),
+        "link-frequency": struct.unpack(">Q", ep["link-frequencies"]) == (456000000,),
+        "endpoint-symbol": symbol(nodes, "imx219_camera0_ep")[0] == SENSOR_EP,
     }
     for name, ok in checks.items():
         if not ok:
-            raise ValueError(f"De werkende sensortest wijkt af: {name}")
+            raise ValueError(f"The working sensor test differs: {name}")
 
 
 def validate_camss_delta(before_blob: bytes, after_blob: bytes,
@@ -55,9 +55,9 @@ def validate_camss_delta(before_blob: bytes, after_blob: bytes,
     before, after = fdt_nodes(before_blob), fdt_nodes(after_blob)
     check_probe_base(before, vendor_paths)
     if set(before) - set(after):
-        raise ValueError("Bestaande nodes verwijderd")
+        raise ValueError("Existing nodes were removed")
     if set(after) - set(before) != {RECEIVER_EP}:
-        raise ValueError("Verwacht alleen één nieuwe CAMSS-endpoint")
+        raise ValueError("Expected exactly one new CAMSS endpoint")
     _, camcc = symbol(after, "camcc")
     _, phy = symbol(after, "vreg_l4a")
     _, pll = symbol(after, "vreg_l5a")
@@ -65,7 +65,7 @@ def validate_camss_delta(before_blob: bytes, after_blob: bytes,
     receiver_handle = cells(after[RECEIVER_EP]["phandle"])[0]
     handles = [cells(n["phandle"])[0] for n in after.values() if "phandle" in n]
     if not receiver_handle or len(handles) != len(set(handles)):
-        raise ValueError("Ongeldige of dubbele phandle in de cameraverbinding")
+        raise ValueError("Invalid or duplicate phandle in the camera connection")
     pack = lambda *n: struct.pack(">" + "I" * len(n), *n)
     expected = {
         (CCI, "assigned-clocks"): pack(camcc, 4),
@@ -91,18 +91,18 @@ def validate_camss_delta(before_blob: bytes, after_blob: bytes,
                 and is_temporary_chosen_property(prop) and prop not in after[path]
             )
             if not allowed:
-                raise ValueError(f"Onverwachte wijziging: {path}:{prop}")
+                raise ValueError(f"Unexpected change: {path}:{prop}")
     for (path, prop), value in expected.items():
         if after[path].get(prop) != value:
-            raise ValueError(f"Verplichte wijziging ontbreekt: {path}:{prop}")
+            raise ValueError(f"Required change is missing: {path}:{prop}")
     receiver = after[RECEIVER_EP]
     if receiver != {
         "phandle": pack(receiver_handle), "data-lanes": pack(0, 1),
         "remote-endpoint": pack(sensor_handle),
     }:
-        raise ValueError("Onverwachte eigenschappen van de CAMSS-endpoint")
+        raise ValueError("Unexpected CAMSS endpoint properties")
     if sanitized and any(is_temporary_chosen_property(p) for p in after.get("/chosen", {})):
-        raise ValueError("Tijdelijke gegevens van de oude boot zijn nog aanwezig")
+        raise ValueError("Temporary data from the previous boot is still present")
     return {
         "camss_enabled": True, "camera0_link_bidirectional": True,
         "sensor_lanes": [1, 2], "receiver_lanes": [0, 1],
@@ -117,14 +117,14 @@ def validate_camss_delta(before_blob: bytes, after_blob: bytes,
 def make_menu(grub: str, *, loader_module: str) -> str:
     menu = make_probe_menu(grub, loader_module=loader_module)
     replacements = {
-        "Ventuno Q IMX219 Camera0 sensortest": "Ventuno Q IMX219 Camera0 CAMSS-test",
+        "Ventuno Q IMX219 Camera0 sensor test": "Ventuno Q IMX219 Camera0 CAMSS test",
         "--id 'ventuno-imx219-probe'": f"--id '{ENTRY_ID}'",
         f"/ventuno-imx219-probe/probe-{KERNEL}.dtb": f"/ventuno-imx219-camss/camss-{KERNEL}.dtb",
         "ventuno_imx219_probe=1": "ventuno_imx219_camss=1",
     }
     for old, new in replacements.items():
         if menu.count(old) != 1:
-            raise ValueError(f"Onverwachte vorm van het menu: {old}")
+            raise ValueError(f"Unexpected menu structure: {old}")
         menu = menu.replace(old, new)
     return menu
 
@@ -135,9 +135,9 @@ def probe_menu(grub: str) -> str:
     starts = [i for i, line in enumerate(lines)
               if re.match(r"^menuentry\s", line) and "--id 'ventuno-imx219-probe'" in line]
     if len(starts) != 1:
-        raise ValueError("Precies één bestaande sensortestoptie verwacht")
+        raise ValueError("Expected exactly one existing sensor test entry")
     start = starts[0]
     end = next((i for i in range(start + 1, len(lines)) if lines[i] == "}"), None)
     if end is None:
-        raise ValueError("Onvolledige sensortestoptie")
+        raise ValueError("Incomplete sensor test entry")
     return "\n".join(lines[start:end + 1])

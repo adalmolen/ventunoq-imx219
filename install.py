@@ -37,7 +37,7 @@ FRAGMENT = '# ventunoq-imx219\nGRUB_DEFAULT="ventuno-imx219-stability"\nGRUB_TIM
 
 def run(args, timeout=45, cwd=None):
     result = subprocess.run(args, text=True, capture_output=True, timeout=timeout, cwd=cwd)
-    if result.returncode: raise RuntimeError(f'{args[0]} mislukt: {result.stderr.strip() or result.stdout.strip()}')
+    if result.returncode: raise RuntimeError(f'{args[0]} failed: {result.stderr.strip() or result.stdout.strip()}')
     return result.stdout.strip()
 
 
@@ -59,7 +59,7 @@ def atomic(path, data, mode=0o644):
 
 
 def remember(path):
-    if path.is_symlink(): raise ValueError(f'Onverwachte symlink: {path}')
+    if path.is_symlink(): raise ValueError(f'Unexpected symlink: {path}')
     if not path.exists(): return None
     stat = path.stat()
     return {'data': base64.b64encode(path.read_bytes()).decode(), 'mode': stat.st_mode & 0o777,
@@ -76,30 +76,30 @@ def restore(path, record):
 def check_environment(build=False):
     info = os.uname()
     if info.sysname != 'Linux' or info.machine != 'aarch64' or info.release != KERNEL:
-        raise ValueError(f'Alleen Ventuno Q aarch64 met kernel {KERNEL} wordt ondersteund.')
+        raise ValueError(f'Only Ventuno Q aarch64 with kernel {KERNEL} is supported.')
     compatible = Path('/sys/firmware/devicetree/base/compatible').read_bytes().split(b'\0')
-    if not {b'arduino,monza', b'qcom,qcs8300'} <= set(compatible): raise ValueError('Onbekende Ventuno Q-boardvariant.')
+    if not {b'arduino,monza', b'qcom,qcs8300'} <= set(compatible): raise ValueError('Unknown Ventuno Q board variant.')
     version = run(['dpkg-query', '-W', '-f=${Version}', f'linux-image-{KERNEL}'])
-    if not version.startswith('6.8.0-1080.85'): raise ValueError('Het kernelpakket wijkt af van linux-qcom 6.8.0-1080.85.')
+    if not version.startswith('6.8.0-1080.85'): raise ValueError('The kernel package does not match linux-qcom 6.8.0-1080.85.')
     commands = ['modinfo', 'modprobe', 'insmod', 'udevadm', 'media-ctl', 'v4l2-ctl', 'fuser',
                 'dtc', 'fdtoverlay', 'fdtput', 'grub-mkconfig', 'grub-script-check', 'grub-reboot',
                 'grub-editenv', 'systemctl', 'docker', 'arduino-app-cli']
     if build: commands += ['gcc-13', 'make', 'cc']
     missing = [name for name in commands if not shutil.which(name)]
-    if missing: raise ValueError('Gereedschap ontbreekt: ' + ', '.join(missing) + '. Zie README.md, afhankelijkheden.')
+    if missing: raise ValueError('Missing tools: ' + ', '.join(missing) + '. See README.md for dependencies.')
     stock = run(['modinfo', '-F', 'srcversion', 'qcom_camss'])
-    if stock != '6836E35C0AA1F2FCD21FCBD': raise ValueError('De oorspronkelijke geïnstalleerde CAMSS wijkt af; niets overschrijven.')
+    if stock != '6836E35C0AA1F2FCD21FCBD': raise ValueError('The installed original CAMSS differs from the expected version; do not overwrite it.')
     if build:
         headers = Path(f'/lib/modules/{KERNEL}/build')
         if not (headers / 'Module.symvers').is_file() or (headers / 'include/config/kernel.release').read_text().strip() != KERNEL:
-            raise ValueError('De passende kernelheaders en Module.symvers ontbreken.')
+            raise ValueError('The matching kernel headers and Module.symvers are missing.')
     return {'kernel': KERNEL, 'kernel_package': version, 'architecture': 'aarch64', 'board': 'arduino,monza / qcom,qcs8300'}
 
 
 def check_next_entry():
     entries = [line.partition('=')[2] for line in run(['grub-editenv', str(ENV), 'list']).splitlines() if line.partition('=')[0] == 'next_entry']
     if len(entries) > 1 or any(entries):
-        raise ValueError('Er staat al een eenmalige GRUB-bootkeuze klaar. Rond die eerst af; zie README.md.')
+        raise ValueError('A one-time GRUB boot selection is already pending. Complete it first; see README.md.')
 
 
 def built_artifacts():
@@ -110,13 +110,13 @@ def built_artifacts():
     if (report.get('kernel') != KERNEL or report.get('srcversion') != release.SRCVERSION
             or report.get('source_manifest_sha256') != release.sha(PACKAGE / 'SHA256SUMS')
             or release.sha(module) != report.get('module_sha256') or release.sha(native) != report.get('native_sha256')):
-        raise ValueError('Bouwcontrole mislukt; voer bash scripts/build.sh opnieuw uit.')
+        raise ValueError('Build verification failed; run bash scripts/build.sh again.')
     for field, expected in [('name', 'qcom_camss'), ('srcversion', release.SRCVERSION),
                             ('vermagic', KERNEL + ' SMP preempt mod_unload modversions aarch64')]:
-        if run(['modinfo', '-F', field, str(module)]) != expected: raise ValueError('De driver-ABI of bronversie wijkt af.')
+        if run(['modinfo', '-F', field, str(module)]) != expected: raise ValueError('The driver ABI or source version does not match.')
     blob = native.read_bytes()
     if blob[:6] != b'\x7fELF\x02\x01' or int.from_bytes(blob[18:20], 'little') != 183:
-        raise ValueError('Ongeldige native aarch64-bibliotheek.')
+        raise ValueError('Invalid native aarch64 library.')
     return report, module, native
 
 
@@ -127,9 +127,9 @@ def prepare():
     boot.secure_boot(blob)
     check_next_entry()
     grub = CFG.read_text()
-    if boot.camera_blocks(grub): raise ValueError('Een camera-boot bestaat al. Dit pakket is voor een schone installatie; zie README.md.')
+    if boot.camera_blocks(grub): raise ValueError('A camera boot entry already exists. This package requires a fresh installation; see README.md.')
     for path in [Path(f'/boot/vmlinuz-{KERNEL}'), Path(f'/boot/initrd.img-{KERNEL}')]:
-        if not path.is_file(): raise ValueError(f'Bootbestand ontbreekt: {path}')
+        if not path.is_file(): raise ValueError(f'Missing boot file: {path}')
     work = Path(tempfile.mkdtemp(prefix='boot-', dir=PACKAGE / '.build'))
     dtb, validation = boot.generate_dtb(blob, work, run)
     menu = boot.make_menu(grub, boot.loader_module())
@@ -141,8 +141,8 @@ def prepare():
             'dtb_sha256': sha(dtb), 'menu_sha256': sha(menu.encode()), 'validation': validation,
             'source_manifest_sha256': release.sha(PACKAGE / 'SHA256SUMS')}
     atomic(PACKAGE / '.build/prepared.json', json.dumps(data, indent=2).encode(), 0o600)
-    print('DTB en GRUB-voorbeeld gecontroleerd. Bootconfiguratie en draaiende drivers zijn niet gewijzigd.')
-    print('Volgende stap: sudo python3 install.py install')
+    print('DTB and GRUB preview verified. The boot configuration and running drivers are unchanged.')
+    print('Next step: sudo python3 install.py install')
 
 
 def status():
@@ -153,7 +153,7 @@ def status():
         response = bytearray()
         while not response.endswith(b'\n'):
             data = client.recv(4096)
-            if not data or len(response) + len(data) > 8192: raise ValueError('Ongeldig antwoord van de cameradienst.')
+            if not data or len(response) + len(data) > 8192: raise ValueError('Invalid response from the camera service.')
             response.extend(data)
     return json.loads(response)
 
@@ -162,13 +162,13 @@ def idle():
     if Path(SOCKET).exists():
         reply = status()
         if reply.get('state') != 'idle' or reply.get('active_apps') != 0:
-            raise ValueError('Stop eerst de camera-app en wacht 15 seconden. De camera is niet in rust.')
+            raise ValueError('Stop the camera app and wait 15 seconds. The camera is not idle.')
 
 
 def metadata():
-    if not META.is_file(): raise ValueError('Geen installatie van dit publieke pakket gevonden.')
+    if not META.is_file(): raise ValueError('No installation of this public package was found.')
     data = json.loads(META.read_text())
-    if data.get('rolled_back'): raise ValueError('Deze installatie is al teruggedraaid.')
+    if data.get('rolled_back'): raise ValueError('This installation has already been rolled back.')
     return data
 
 
@@ -192,19 +192,19 @@ def install():
     check_environment()
     build, module, native = built_artifacts()
     if META.exists() or DEST.exists() or UNIT.exists() or CUSTOM.exists() or boot.DTB.exists() or DEFAULT.exists() or Path(SOCKET).exists() or STATE.exists():
-        raise ValueError('Er is al een camera-installatie aanwezig. Niets overschreven; zie README.md, bestaande testinstallatie.')
+        raise ValueError('A camera installation already exists. Nothing was overwritten; see Existing installations in README.md.')
     account_name = os.environ.get('SUDO_USER')
-    if not account_name or account_name == 'root': raise ValueError('Start vanuit je gewone App Lab-gebruiker met sudo.')
+    if not account_name or account_name == 'root': raise ValueError('Run with sudo from your regular App Lab user account.')
     account = pwd.getpwnam(account_name)
     if grp.getgrnam('video').gr_gid not in os.getgrouplist(account_name, account.pw_gid):
-        raise ValueError('De App Lab-gebruiker zit niet in de groep video. Zie README.md.')
+        raise ValueError('The App Lab user is not in the video group. See README.md.')
     prepared = json.loads((PACKAGE / '.build/prepared.json').read_text())
     blob = Path('/sys/firmware/fdt').read_bytes()
     boot.secure_boot(blob)
     grub = CFG.read_text()
     if (prepared['source_fdt_sha256'] != sha(blob) or prepared['source_grub_sha256'] != sha(grub.encode())
             or prepared['source_manifest_sha256'] != release.sha(PACKAGE / 'SHA256SUMS')):
-        raise ValueError('Boot, GRUB of pakket is veranderd. Voer prepare opnieuw uit.')
+        raise ValueError('The boot configuration, GRUB, or package has changed. Run prepare again.')
     check_next_entry()
     work = Path(prepared['directory'])
     # Rebuild from the current live DTB and validate every allowed change again.
@@ -212,7 +212,7 @@ def install():
     dtb, validation = boot.generate_dtb(blob, verified, run)
     menu = boot.make_menu(grub, boot.loader_module())
     if sha(dtb) != prepared['dtb_sha256'] or sha(menu.encode()) != prepared['menu_sha256']:
-        raise ValueError('Voorbereide bootbestanden komen niet overeen met de herhaalde controle.')
+        raise ValueError('The prepared boot files do not match the repeated verification.')
     managed = [CUSTOM, DEFAULT, UNIT, boot.DTB]
     record = {'version': (PACKAGE / 'VERSION').read_text().strip(), 'uid': account.pw_uid,
               'kernel': KERNEL, 'source_manifest_sha256': release.sha(PACKAGE / 'SHA256SUMS'),
@@ -236,7 +236,7 @@ def install():
         atomic(UNIT, unit.encode())
         candidate = new_config(grub, menu)
         if CFG.read_text() != grub or remember(ENV) != record['grubenv_before']:
-            raise ValueError('Bootconfiguratie is ondertussen gewijzigd.')
+            raise ValueError('The boot configuration changed during installation.')
         atomic(CFG, candidate, record['grub_before']['mode'])
         record['owned'] = {str(path): release.sha(path) for path in managed if path.exists()}
         record['grub_installed_sha256'] = sha(candidate)
@@ -247,7 +247,7 @@ def install():
             if Path(SOCKET).exists(): break
             time.sleep(.1)
         reply = status()
-        if reply.get('state') != 'idle': raise ValueError('De nieuwe cameradienst is niet in rust gestart.')
+        if reply.get('state') != 'idle': raise ValueError('The new camera service did not start in the idle state.')
     except BaseException:
         subprocess.run(['systemctl', 'disable', '--now', SERVICE], capture_output=True, timeout=25)
         for name, saved in record['before'].items(): restore(Path(name), saved)
@@ -256,19 +256,19 @@ def install():
         record['rolled_back'] = True
         write_metadata(record)
         raise
-    print('Geïnstalleerd. Ubuntu blijft standaard; geen driver gewisseld en niet herstart.')
-    print('Volgende stap: sudo python3 install.py test-boot, daarna sudo reboot')
+    print('Installed. Ubuntu remains the default; no driver was replaced and no reboot was performed.')
+    print('Next step: sudo python3 install.py test-boot, then sudo reboot')
 
 
 def test_boot():
     data = metadata()
     idle()
     check_next_entry()
-    if boot.camera_blocks(CFG.read_text()) != [data['menu']]: raise ValueError('Camera-menu is gewijzigd.')
+    if boot.camera_blocks(CFG.read_text()) != [data['menu']]: raise ValueError('The camera menu entry has changed.')
     run(['grub-reboot', boot.ENTRY])
     data['test_boot_requested'] = True
     write_metadata(data)
-    print('Eenmalige cameraboot ingepland. Herstart zelf met sudo reboot. Ubuntu blijft de terugvaloptie.')
+    print('One-time camera boot scheduled. Reboot manually with sudo reboot. Ubuntu remains available as a fallback.')
 
 
 def verify():
@@ -281,14 +281,14 @@ def verify():
     before = set(diagnostics.glob('ventunoq-imx219-fhd-test.*/result.json'))
     print(run([sys.executable, str(DEST / 'capture_fhd_test.py'), '--output-root', str(diagnostics)], timeout=40))
     created = set(diagnostics.glob('ventunoq-imx219-fhd-test.*/result.json')) - before
-    if len(created) != 1: raise ValueError('Geen uniek nieuw opnameresultaat.')
+    if len(created) != 1: raise ValueError('The new capture did not produce a unique result file.')
     proof = created.pop()
     validate_proof(json.loads(proof.read_text()))
     atomic(STATE / 'proof.json', proof.read_bytes())
     data = metadata()
     data['stage'] = 'verified'
     write_metadata(data)
-    print('Drie volledige Full HD-frames ontvangen. CAMSS blijft geladen. Je kunt de App Lab-app nu importeren en starten.')
+    print('Three complete Full HD frames received. CAMSS stays loaded. You can now import and start the App Lab app.')
 
 
 def validate_proof(data):
@@ -297,7 +297,7 @@ def validate_proof(data):
             or data.get('loaded_srcversion') != release.SRCVERSION or data.get('frame_count') != 3
             or data.get('capture_process_stopped') is not True or data.get('new_kernel_faults') != []
             or data.get('format', {}).get('width') != 1920 or data.get('format', {}).get('height') != 1080):
-        raise ValueError('Een geslaagde nieuwe Full HD-test in deze boot is vereist.')
+        raise ValueError('A successful new Full HD test from the current boot is required.')
 
 
 def make_default():
@@ -306,14 +306,14 @@ def make_default():
     boot.check_arguments(Path('/proc/cmdline').read_text().split())
     check_next_entry()
     if data['stage'] == 'default':
-        print('De camera-boot is al standaard.')
+        print('The camera boot is already the default.')
         return
-    if DEFAULT.exists(): raise ValueError('De standaardbootinstelling bestaat al en wordt niet overschreven.')
+    if DEFAULT.exists(): raise ValueError('The default boot setting already exists and will be preserved.')
     previous = CFG.read_text()
     try:
         atomic(DEFAULT, FRAGMENT.encode())
         candidate = new_config(previous, data['menu'], default=True)
-        if CFG.read_text() != previous: raise ValueError('GRUB is ondertussen gewijzigd.')
+        if CFG.read_text() != previous: raise ValueError('GRUB changed during this operation.')
         atomic(CFG, candidate, data['grub_before']['mode'])
     except BaseException:
         DEFAULT.unlink(missing_ok=True)
@@ -322,7 +322,7 @@ def make_default():
     data['owned'][str(DEFAULT)] = release.sha(DEFAULT)
     data['grub_installed_sha256'] = sha(candidate)
     write_metadata(data)
-    print('De geteste camera-boot is nu standaard. Ubuntu blijft beschikbaar in het GRUB-menu van 5 seconden.')
+    print('The tested camera boot is now the default. Ubuntu remains available in the 5-second GRUB menu.')
 
 
 def rollback():
@@ -332,7 +332,7 @@ def rollback():
     for name, expected in data['owned'].items():
         path = Path(name)
         if not path.exists() or release.sha(path) != expected:
-            raise ValueError(f'Een installatiebestand is achteraf gewijzigd: {name}. Eerst onderzoeken.')
+            raise ValueError(f'An installed file has been modified: {name}. Investigate before proceeding.')
     previous_cfg = CFG.read_bytes()
     run(['systemctl', 'disable', '--now', SERVICE], timeout=25)
     try:
@@ -349,28 +349,28 @@ def rollback():
                 run(['grub-script-check', str(temporary)])
                 text = temporary.read_text()
                 if boot.camera_blocks(text) or not any("menuentry 'Ubuntu'" in line for line in text.splitlines()):
-                    raise ValueError('Geen geldige Ubuntu-terugvalconfiguratie na verwijderen.')
+                    raise ValueError('No valid Ubuntu fallback configuration was found after removal.')
                 atomic(CFG, temporary.read_bytes(), data['grub_before']['mode'])
             finally: temporary.unlink(missing_ok=True)
         run(['systemctl', 'daemon-reload'])
     except BaseException:
-        print('Herstel is onvolledig. Niet herstarten; de back-up staat in ' + str(META), file=sys.stderr)
+        print('Rollback is incomplete. Do not reboot; the backup is at ' + str(META), file=sys.stderr)
         raise
     data['rolled_back'] = True
     write_metadata(data)
-    print('Cameradienst uitgeschakeld en eerdere bootkeuze hersteld. Niet herstart; CAMSS blijft geladen tot uitschakelen.')
-    print('App en lokale diagnosebestanden blijven bewaard. Verwijder de app desgewenst apart in App Lab.')
+    print('Camera service disabled and previous boot selection restored. No reboot performed; CAMSS stays loaded until shutdown.')
+    print('The app and local diagnostics are retained. You can remove the app separately in App Lab.')
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('action', choices=['check', 'prepare', 'install', 'test-boot', 'verify', 'make-default', 'status', 'rollback'])
-    parser.add_argument('--build', action='store_true', help='Controleer ook de kernelheaders en compiler.')
+    parser.add_argument('--build', action='store_true', help='Also check the kernel headers and compiler.')
     args = parser.parse_args()
     if args.action == 'check':
         print(json.dumps(check_environment(args.build), indent=2))
         return
-    if os.geteuid() != 0: raise ValueError('Gebruik sudo python3 install.py ' + args.action)
+    if os.geteuid() != 0: raise ValueError('Use sudo python3 install.py ' + args.action)
     os.environ['PATH'] = '/usr/sbin:/usr/bin:/sbin:/bin'
     os.environ['LC_ALL'] = 'C'
     if args.action == 'status': print(json.dumps(status(), indent=2))
@@ -380,4 +380,4 @@ def main():
 if __name__ == '__main__':
     try: main()
     except (RuntimeError, ValueError, OSError, KeyError, ImportError, subprocess.SubprocessError) as exc:
-        raise SystemExit(f'FOUT: {exc}') from None
+        raise SystemExit(f'ERROR: {exc}') from None

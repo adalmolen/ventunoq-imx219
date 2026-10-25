@@ -26,7 +26,7 @@ def docker_gateway():
         address = config.get('Gateway', '')
         if address and ipaddress.ip_address(address).version == 4:
             return address
-    raise RuntimeError('Docker-hostgateway niet gevonden; geef --bind met het juiste hostgateway-adres.')
+    raise RuntimeError('Docker host gateway not found; use --bind with the correct host gateway address.')
 
 
 class Frames:
@@ -53,7 +53,7 @@ def handler_for(frames, fmt):
                 code, mime = 200, 'application/json'
             elif self.path.split('?')[0] == '/frame.jpg':
                 if jpeg is None or time.time() - jpeg[1] > 3 or state['error']:
-                    payload, code, mime = b'Nog geen actueel camerabeeld', 503, 'text/plain'
+                    payload, code, mime = b'No current camera frame yet', 503, 'text/plain'
                 else:
                     payload, code, mime = jpeg[2], 200, 'image/jpeg'
             else:
@@ -85,7 +85,7 @@ def reader(process, frames, size, stop):
             if ready:
                 chunk = os.read(process.stdout.fileno(), 1048576)
                 if not chunk:
-                    raise RuntimeError('RAW10-stream is gestopt.')
+                    raise RuntimeError('The RAW10 stream has stopped.')
                 buffer.extend(chunk)
                 while len(buffer) >= size:
                     data = bytes(buffer[:size])
@@ -95,7 +95,7 @@ def reader(process, frames, size, stop):
                         frames.received += 1
                         frames.raw = (frames.received, time.time(), data)
             if time.monotonic() - last > 5:
-                raise RuntimeError('Vijf seconden geen volledig cameraframe ontvangen.')
+                raise RuntimeError('No complete camera frame received for five seconds.')
     except Exception as exc:
         if not stop.is_set():
             with frames.lock:
@@ -128,29 +128,29 @@ def renderer(frames, fmt, lut, fps, stop, look):
             stop.wait(max(0, 1 / fps - (time.monotonic() - started)))
     except Exception as exc:
         with frames.lock:
-            frames.error = f'RGB-conversie mislukt: {exc}'
+            frames.error = f'RGB conversion failed: {exc}'
         stop.set()
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--duration', type=float, default=30, help='Seconden; 0 voor doorlopend. Eerst 30 seconden testen.')
-    parser.add_argument('--proof', help='result.json van een geslaagde FHD-test in dezelfde boot; standaard automatisch zoeken')
-    parser.add_argument('--bind', help='Hostgateway-adres; standaard Docker bridge gateway, geen LAN-bind')
+    parser.add_argument('--duration', type=float, default=30, help='Seconds; 0 for continuous capture. Test for 30 seconds first.')
+    parser.add_argument('--proof', help='result.json from a successful FHD test in the same boot; discovered automatically by default')
+    parser.add_argument('--bind', help='Host gateway address; defaults to the Docker bridge gateway, not a LAN address')
     parser.add_argument('--port', type=int, default=8088)
     parser.add_argument('--preview-fps', type=float, default=10)
-    parser.add_argument('--output-root', type=Path, help='Bestaande diagnosemap voor de automatische cameradienst')
+    parser.add_argument('--output-root', type=Path, help='Existing diagnostics directory for the automatic camera service')
     parser.add_argument('--display-gain', type=float, default=3)
     args = parser.parse_args()
     if (not all(math.isfinite(v) for v in [args.duration, args.preview_fps, args.display_gain])
             or args.duration < 0 or not 0 < args.preview_fps <= 15
             or not 0 < args.display_gain <= 8 or not 1 <= args.port <= 65535):
-        parser.error('Ongeldige duur, preview-fps of weergavefactor.')
+        parser.error('Invalid duration, preview frame rate, or display gain.')
     try:
         from raw10_rgb import colour_lut
         import PIL.Image
     except ModuleNotFoundError:
-        raise RuntimeError('Hostafhankelijkheden ontbreken. Installeer python3-numpy en python3-pil.') from None
+        raise RuntimeError('Host dependencies are missing. Install python3-numpy and python3-pil.') from None
     info = preflight()
     proof = find_proof(args.proof)
     address = args.bind or docker_gateway()
@@ -192,7 +192,7 @@ def main():
                 thread.start()
                 threads.append(thread)
             started, next_report = time.monotonic(), time.monotonic()
-            print(f'Camerabrug: http://{address}:{args.port}\nApp Lab-bron: http://msgpack-rpc-router:{args.port}\nDiagnose: {output}', flush=True)
+            print(f'Camera bridge: http://{address}:{args.port}\nApp Lab source: http://msgpack-rpc-router:{args.port}\nDiagnostics: {output}', flush=True)
             while not stop.wait(.2):
                 elapsed = time.monotonic() - started
                 if args.duration and elapsed >= args.duration:
@@ -200,7 +200,7 @@ def main():
                     break
                 if time.monotonic() >= next_report:
                     with frames.lock:
-                        print(f'{frames.received} RAW-frames; {frames.rendered} RGB-previews; circa {frames.received / max(.001, elapsed):.1f} ontvangen fps', flush=True)
+                        print(f'{frames.received} RAW frames; {frames.rendered} RGB previews; approximately {frames.received / max(.001, elapsed):.1f} received fps', flush=True)
                     next_report = time.monotonic() + 5
         except Exception as exc:
             frames.error = str(exc)
@@ -224,9 +224,9 @@ def main():
             result['cancelled_before_first_frame'] = bool(args.duration == 0 and stopped and not frames.rendered
                                                          and not frames.error and not faults)
             (output / 'result.json').write_text(json.dumps(result, indent=2) + '\n')
-    print(f'Brug gestopt. Geslaagd: {result["passed"]}. Diagnose: {output}. CAMSS blijft geladen.', flush=True)
+    print(f'Bridge stopped. Passed: {result["passed"]}. Diagnostics: {output}. CAMSS stays loaded.', flush=True)
     if not result['capture_process_stopped']:
-        print('Captureproces stopt niet. Gebruik een tweede terminal; geen modules verwijderen.', flush=True)
+        print('The capture process will not stop. Use a second terminal; do not unload modules.', flush=True)
     return 0 if result['passed'] or result['cancelled_before_first_frame'] else 1
 
 
@@ -234,4 +234,4 @@ if __name__ == '__main__':
     try:
         raise SystemExit(main())
     except (RuntimeError, OSError, subprocess.SubprocessError) as exc:
-        raise SystemExit(f'FOUT: {exc}') from None
+        raise SystemExit(f'ERROR: {exc}') from None

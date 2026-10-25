@@ -20,7 +20,7 @@ source.start()
 detector = ObjectDetection(confidence=settings['confidence'])
 model = detector.get_model_info()
 if model is None:
-    raise RuntimeError('De Object Detection-brick heeft geen modelinformatie geleverd.')
+    raise RuntimeError('The Object Detection brick did not provide model information.')
 session = VisionSession(detector, (model.image_input_width, model.image_input_height), settings,
                         getattr(model, 'name', 'Object Detection'), getattr(model, 'labels', []), source=source)
 ui = WebUI()
@@ -70,7 +70,7 @@ ui.expose_api('POST', '/api/settings', configure)
 ui.expose_api('GET', '/api/picture', picture)
 ui.expose_api('POST', '/api/picture', picture_configure)
 
-print('IMX219-app v2: automatische camera, zelfstandig livebeeld en aparte herkenningsbeelden.', flush=True)
+print('IMX219 app: automatic camera, independent live preview, and separate detection frames.', flush=True)
 try:
     App.run(user_loop=session.step)
 finally:

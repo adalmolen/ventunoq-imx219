@@ -22,7 +22,7 @@ def letterbox(image, target):
 
 def map_detections(result, geometry):
     if not isinstance(result, dict) or not isinstance(result.get('detection'), list):
-        raise ValueError('Het AI-model heeft geen geldig detectieresultaat teruggegeven.')
+        raise ValueError('The AI model did not return a valid detection result.')
     detections = []
     for detection in result['detection']:
         box = detection.get('bounding_box_xyxy')
@@ -49,7 +49,7 @@ def map_detections(result, geometry):
 class VisionSession:
     def __init__(self, detector, model_size, settings, model_name, labels, source):
         if len(model_size) != 2 or any(not 1 <= value <= 4096 for value in model_size):
-            raise ValueError('Ongeldige beeldafmetingen in modelinformatie.')
+            raise ValueError('Invalid image dimensions in the model information.')
         self.detector, self.model_size = detector, tuple(model_size)
         self.source = source
         self.interval = 1 / max(.2, min(10, settings.get('max_inferences_per_second', 5)))
@@ -58,7 +58,7 @@ class VisionSession:
         self.enabled = True
         self.last_id = None
         self.generation = 0
-        self.packet = {'status': 'waiting', 'message': 'Wachten op de IMX219-camerabrug…',
+        self.packet = {'status': 'waiting', 'message': 'Waiting for the IMX219 camera bridge…',
                        'model': model_name, 'model_size': list(model_size), 'labels': labels,
                        'image': None, 'detections': [], 'frame_id': None,
                        'captured_at': None, 'inference_ms': None}
@@ -77,14 +77,14 @@ class VisionSession:
         with self.lock:
             threshold = float(values.get('confidence', self.threshold))
             if not math.isfinite(threshold) or not .1 <= threshold <= .95:
-                raise ValueError('Kies een detectiedrempel tussen 10% en 95%.')
+                raise ValueError('Choose a detection threshold between 10% and 95%.')
             enabled = values.get('enabled', self.enabled)
             if not isinstance(enabled, bool):
-                raise ValueError('enabled moet true of false zijn.')
+                raise ValueError('enabled must be true or false.')
             self.threshold, self.enabled = threshold, enabled
             self.generation += 1
             self.packet = {**self.packet, 'detections': [], 'status': 'waiting' if enabled else 'paused',
-                           'message': 'Nieuwe instelling wordt toegepast' if enabled else 'Herkenning gepauzeerd; livebeeld blijft actief'}
+                           'message': 'Applying the new setting' if enabled else 'Detection paused; live preview remains active'}
             self.last_id = None
         return {'confidence': threshold, 'enabled': enabled}
 
@@ -105,7 +105,7 @@ class VisionSession:
                 return
             with Image.open(io.BytesIO(image_bytes)) as source:
                 if source.size != (1920, 1080):
-                    raise ValueError(f'1920×1080 verwacht; {source.size} ontvangen.')
+                    raise ValueError(f'Expected 1920×1080; received {source.size}.')
                 image = source.convert('RGB')
             inference_ms, detections = None, []
             if enabled:
@@ -118,7 +118,7 @@ class VisionSession:
                 inference_ms = (time.monotonic() - before) * 1000
                 detections = map_detections(result, geometry)
             update = {'status': 'live' if enabled else 'paused',
-                      'message': 'Objectdetectie actief' if enabled else 'Detectie gepauzeerd; camera blijft actief',
+                      'message': 'Object detection is active' if enabled else 'Detection paused; camera remains active',
                       'image': 'data:image/jpeg;base64,' + base64.b64encode(image_bytes).decode('ascii'),
                       'width': 1920, 'height': 1080, 'frame_id': frame_id, 'captured_at': captured,
                       'inference_ms': inference_ms, 'detections': detections}
@@ -130,7 +130,7 @@ class VisionSession:
             with self.lock:
                 if generation == self.generation:
                     self.packet = {**self.packet, 'status': 'waiting', 'detections': [],
-                                   'message': f'Geen actueel beeld of AI-resultaat: {exc}'}
+                                   'message': f'No current frame or AI result: {exc}'}
                     # Recovery may process the same most-recent frame.
                     self.last_id = None
         time.sleep(max(.02, self.interval - (time.monotonic() - started)))

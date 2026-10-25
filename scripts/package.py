@@ -37,20 +37,20 @@ def verify():
         expected, name = line.split('  ', 1)
         path = Path(name)
         if path.is_absolute() or '..' in path.parts or name in listed or not re.fullmatch('[a-f0-9]{64}', expected):
-            raise ValueError('Ongeldig bronmanifest.')
+            raise ValueError('Invalid source manifest.')
         listed[name] = expected
     actual = {str(path.relative_to(ROOT)): sha(path) for path in files()}
     if listed != actual:
-        raise ValueError('Broncontrole mislukt. Gebruik een ongewijzigde release of maak na wijzigingen een nieuw manifest.')
+        raise ValueError('Source verification failed. Use an unmodified release or generate a new manifest after editing.')
     for path in files():
-        if path.is_symlink(): raise ValueError('Symlinks zijn niet toegestaan in releases.')
+        if path.is_symlink(): raise ValueError('Symlinks are not allowed in releases.')
         text = path.read_text()
         patterns = [r'github_pat_[A-Za-z0-9_]{20,}', r'gh[pousr]_[A-Za-z0-9]{20,}',
                     '/U' + r'sers/[^/\s]+/', r'\b192\.168\.\d+\.\d+\b',
                     r'-----BEGIN (?:OPENSSH|RSA|EC) PRIVATE KEY-----']
         if any(re.search(pattern, text) for pattern in patterns):
-            raise ValueError(f'Mogelijke privégegevens in {path.relative_to(ROOT)}.')
-    print(f'Broncontrole geslaagd: {len(actual)} bestanden.')
+            raise ValueError(f'Possible private data in {path.relative_to(ROOT)}.')
+    print(f'Source verification passed: {len(actual)} files.')
 
 
 def app_zip():
@@ -75,15 +75,15 @@ def record_build():
         return subprocess.check_output(['modinfo', '-F', field, str(module)], text=True).strip()
     magic = KERNEL + ' SMP preempt mod_unload modversions aarch64'
     if info('srcversion') != SRCVERSION or info('vermagic') != magic or info('name') != 'qcom_camss':
-        raise ValueError('De gebouwde driver heeft een onverwachte bronversie of ABI.')
+        raise ValueError('The built driver has an unexpected source version or ABI.')
     blob = native.read_bytes()
     if blob[:6] != b'\x7fELF\x02\x01' or int.from_bytes(blob[18:20], 'little') != 183:
-        raise ValueError('De beeldbibliotheek is geen aarch64 ELF-bestand.')
+        raise ValueError('The image library is not an aarch64 ELF file.')
     data = {'schema': 1, 'kernel': KERNEL, 'srcversion': SRCVERSION, 'vermagic': magic,
             'module_sha256': sha(module), 'native_sha256': sha(native),
             'source_manifest_sha256': sha(ROOT / 'SHA256SUMS')}
     (ROOT / '.build/build.json').write_text(json.dumps(data, indent=2) + '\n')
-    print('Driver en native beeldbibliotheek gecontroleerd; build.json geschreven.')
+    print('Driver and native image library verified; build.json written.')
 
 
 def release():

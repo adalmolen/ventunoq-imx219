@@ -11,9 +11,9 @@ DEFAULTS = {'brightness': 100, 'contrast': 100}
 
 def validate(values):
     if not isinstance(values, dict) or set(values) != set(DEFAULTS):
-        raise ValueError('Geef helderheid en contrast op.')
+        raise ValueError('Provide brightness and contrast.')
     if any(type(value) is not int or not 50 <= value <= 150 for value in values.values()):
-        raise ValueError('Kies gehele percentages tussen 50 en 150.')
+        raise ValueError('Choose whole percentages between 50 and 150.')
     return dict(values)
 
 
@@ -24,7 +24,7 @@ def read(path):
         return dict(DEFAULTS)
     if (not isinstance(data, dict) or type(data.get('schema')) is not int
             or data['schema'] != 1 or set(data) != {'schema', *DEFAULTS}):
-        raise ValueError('Ongeldige opgeslagen beeldinstellingen.')
+        raise ValueError('Invalid saved picture settings.')
     return validate({key: data[key] for key in DEFAULTS})
 
 

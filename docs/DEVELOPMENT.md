@@ -1,43 +1,42 @@
-# Ontwikkelen en releases
+# Development and releases
 
-Het pakket bevat broncode. Bouw de driver op de ondersteunde doel-Ventuno Q met
-de passende kernelheaders. Er wordt geen vooraf gebouwde kernelmodule voor
-andere machines gepubliceerd.
+This package contains source code. Build the driver on a supported target Ventuno Q
+with matching kernel headers. No prebuilt kernel module for other machines is published.
 
-## Controle en tests zonder camera
+## Verification and tests without a camera
 
 ```bash
 python3 scripts/package.py verify
 bash scripts/test.sh
 ```
 
-NumPy, Pillow en een C-compiler moeten in de gebruikte omgeving beschikbaar zijn.
-De tests bouwen alleen de RGB-bibliotheek en controleren CPU-verwerking,
-beeldinstellingen, bootmenugeneratie en herstelhelpers. Geen camera of module
-wordt gestart en `/boot` en `/etc` worden niet gewijzigd. Op macOS kan een aparte
-Python-omgeving met NumPy/Pillow nodig zijn.
+NumPy, Pillow, and a C compiler must be available in the environment.
+The tests build only the RGB library and check CPU processing, picture settings,
+boot menu generation, and rollback helpers. They do not start a camera or load a
+module, and do not modify `/boot` or `/etc`. On macOS, a separate Python environment
+with NumPy/Pillow may be needed.
 
-GitHub Actions voert bron- en verwerkingstests op Ubuntu 24.04 uit. Dat is geen
-hardwaretest van CAMSS, CSI, IMX219 of QNN.
+GitHub Actions runs source and processing tests on Ubuntu 24.04. This is not a
+hardware test of CAMSS, CSI, IMX219, or QNN.
 
-`SHA256SUMS` controleert verpakte bronbestanden op wijzigingen. Dit is een
-integriteitscontrole, geen digitale handtekening. `.build/build.json` koppelt de
-gebouwde module en RGB-bibliotheek aan dat manifest. De driver moet daarnaast
-de bekende bronversie en juiste kernel-ABI hebben.
+`SHA256SUMS` checks packaged source files for changes. It provides integrity
+verification, not a digital signature. `.build/build.json` ties the built module
+and RGB library to that manifest. The driver must also have the known source
+version and correct kernel ABI.
 
-## Op de Ventuno Q bouwen
+## Building on the Ventuno Q
 
 ```bash
 bash scripts/build.sh
 ```
 
-Bouwproducten: `.build/driver/qcom-camss.ko` en `runtime/picture_native.so`.
-Bouwen verandert geen actieve driver of bootkeuze. De patches in `driver/patches`
-zijn al verwerkt in `driver/camss`; pas ze niet opnieuw toe.
+Build products: `.build/driver/qcom-camss.ko` and `runtime/picture_native.so`.
+Building does not change the active driver or boot selection. The patches in
+`driver/patches` are already applied in `driver/camss`; do not apply them again.
 
-## Na wijzigingen en voor een release
+## After changes and before a release
 
-Werk tests en documentatie bij en genereer bewust een nieuw bronmanifest:
+Update tests and documentation, then deliberately generate a new source manifest:
 
 ```bash
 python3 scripts/package.py manifest
@@ -45,33 +44,33 @@ bash scripts/test.sh
 python3 scripts/package.py release
 ```
 
-Bouw de driver opnieuw op het board als uitvoerbare broncode is gewijzigd.
-`dist/` bevat bronarchief, App Lab-ZIP en `SHA256SUMS`. De app-ZIP bevat
-`app.yaml`, `python/` en `assets/` direct in de hoofdmap. Compilerproducten,
-`.build`, lokale opnamen, persoonlijke boot-DTB's en Git-geschiedenis worden
-niet in het bronarchief opgenomen.
+Rebuild the driver on the board when executable source code has changed.
+`dist/` contains the source archive, App Lab ZIP, and `SHA256SUMS`. The app ZIP
+contains `app.yaml`, `python/`, and `assets/` directly at its root. Compiler outputs,
+`.build`, local recordings, personal boot DTBs, and Git history are excluded from
+the source archive.
 
-Geef iedere release een nieuw nummer in `VERSION` en leg uitgevoerde controles
-vast. Markeer een `-rc`-versie als pre-release. Maak een definitieve `1.0.0` pas
-na controle van de volledige installatie vanaf een schone, ondersteunde boot.
-Claim geen tweede-board- of koude-boottest die niet is uitgevoerd.
+Give each release a new number in `VERSION` and record the checks performed.
+Mark an `-rc` version as a pre-release. Publish a final `1.0.0` only after checking
+the complete installation from a fresh, supported boot. Do not claim a second-board
+or cold-boot test that has not been performed.
 
-## Architectuur
+## Architecture
 
 ```mermaid
 flowchart LR
   Sensor[IMX219 Camera0] --> CAMSS[CCI / CSI-PHY / CSID / VFE]
   CAMSS --> RAW[Full HD RAW10]
-  RAW --> RGB[RGB + beeldprofiel + JPEG]
-  RGB --> Live[Livebeeld]
+  RAW --> RGB[RGB + picture profile + JPEG]
+  RGB --> Live[Live preview]
   RGB --> AI[YOLOX Small QNN]
-  AI --> Analysis[Bijbehorend beeld met kaders]
-  App[App Lab-app] -->|lokale lease| Manager[Cameradienst]
+  AI --> Analysis[Matching image with boxes]
+  App[App Lab app] -->|local lease| Manager[Camera service]
   Manager --> CAMSS
-  Controls[Helderheid / contrast] --> RGB
+  Controls[Brightness / contrast] --> RGB
 ```
 
-De dienst accepteert beperkte acties via een lokale Unix-socket en controleert
-de UID van de afzender. Hij start beschermde code onder `/opt`. Beeldregelaars
-wijzigen de RGB-verwerking, geen cameraregisters. De dienst verwijdert of
-vervangt geen geladen CAMSS-module.
+The service accepts limited actions through a local Unix socket and checks the
+sender's UID. It starts protected code under `/opt`. Picture controls change RGB
+processing, not camera registers. The service does not unload or replace a
+loaded CAMSS module.

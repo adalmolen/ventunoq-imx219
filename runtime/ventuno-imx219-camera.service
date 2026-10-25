@@ -1,5 +1,5 @@
 [Unit]
-Description=Ventuno Q IMX219 camera voor Arduino App Lab
+Description=Ventuno Q IMX219 camera for Arduino App Lab
 After=docker.service
 Requires=docker.service
 

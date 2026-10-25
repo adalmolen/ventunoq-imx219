@@ -4,7 +4,7 @@ import numpy as np
 
 def unpack(data, width, height, stride):
     if width % 4 or height % 2 or stride < width * 5 // 4 or len(data) != height * stride:
-        raise ValueError('RAW10-afmetingen/stride komen niet overeen met het frame.')
+        raise ValueError('The RAW10 dimensions/stride do not match the frame.')
     groups = np.frombuffer(data, np.uint8).reshape(height, stride)[:, :width * 5 // 4].reshape(height, width // 4, 5)
     result = np.empty((height, width), np.uint16)
     for k in range(4):
@@ -20,7 +20,7 @@ def _mean(total, count):
 def demosaic(raw):
     height, width = raw.shape
     if width < 2 or height < 2 or width % 2 or height % 2:
-        raise ValueError('Bilinear RGGB vereist even afmetingen van minimaal 2x2.')
+        raise ValueError('Bilinear RGGB requires even dimensions of at least 2x2.')
     result = np.empty((height, width, 3), np.uint16)
 
     # Interpolate each Bayer phase directly. No full-image masks, padding or
@@ -70,9 +70,9 @@ def demosaic(raw):
 def colour_lut(gains, black=64, display_gain=3.0):
     gains = np.asarray(gains, dtype=np.float32)
     if gains.shape != (3,) or not np.all(np.isfinite(gains)) or np.any(gains <= 0):
-        raise ValueError('Ongeldige witbalansfactoren.')
+        raise ValueError('Invalid white balance gains.')
     if not 0 <= black < 1023 or not np.isfinite(display_gain) or display_gain <= 0:
-        raise ValueError('Ongeldig zwartniveau of weergavefactor.')
+        raise ValueError('Invalid black level or display gain.')
     linear = np.clip((np.arange(1024, dtype=np.float32)[:, None] - black) * gains[None, :] * display_gain / (1023 - black), 0, 1)
     encoded = np.where(linear <= .0031308, 12.92 * linear, 1.055 * linear ** (1 / 2.4) - .055)
     return np.rint(encoded * 255).astype(np.uint8)

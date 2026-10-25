@@ -17,7 +17,7 @@ class CameraSource:
         self.session = str(uuid.uuid4())
         self.lock, self.stop = threading.Lock(), threading.Event()
         self.frame, self.error = None, None
-        self.control = {'state': 'starting' if self.managed else 'running', 'message': 'Camera wordt verbonden…'}
+        self.control = {'state': 'starting' if self.managed else 'running', 'message': 'Connecting to the camera…'}
         self.opener = build_opener(ProxyHandler({}))
         self.threads = []
 
@@ -33,17 +33,17 @@ class CameraSource:
             while not response.endswith(b'\n'):
                 data = client.recv(4096)
                 if not data or len(response) + len(data) > 8192:
-                    raise RuntimeError('Ongeldig antwoord van de cameradienst.')
+                    raise RuntimeError('Invalid response from the camera service.')
                 response.extend(data)
         result = json.loads(response)
         if not isinstance(result, dict) or 'state' not in result:
-            raise RuntimeError('Ongeldig antwoord van de cameradienst.')
+            raise RuntimeError('Invalid response from the camera service.')
         return result
 
     def picture(self, values=None):
         result = self.command('picture_get' if values is None else 'picture_set', values)
         if 'picture' not in result:
-            raise ValueError(result.get('message', 'Beeldinstelling kon niet worden opgeslagen.'))
+            raise ValueError(result.get('message', 'The picture setting could not be saved.'))
         return result['picture']
 
     def lease_loop(self):
@@ -51,7 +51,7 @@ class CameraSource:
             try:
                 result = self.command('lease')
             except Exception as exc:
-                result = {'state': 'error', 'message': 'Cameradienst niet bereikbaar. Installeer het v2-hostpakket. ' + str(exc)}
+                result = {'state': 'error', 'message': 'Camera service is unavailable. Install the host package. ' + str(exc)}
             with self.lock:
                 self.control = result
             self.stop.wait(3)
@@ -68,9 +68,9 @@ class CameraSource:
                 captured = float(response.headers['X-Captured-At'])
                 data = response.read(8 * 1024 * 1024 + 1)
             if identity is None or not data or len(data) > 8 * 1024 * 1024:
-                raise ValueError('Onvolledig camerabeeld ontvangen.')
+                raise ValueError('An incomplete camera frame was received.')
             if not math.isfinite(captured) or not -1 <= time.time() - captured <= 3:
-                raise ValueError('Geen actueel camerabeeld ontvangen.')
+                raise ValueError('No current camera frame was received.')
             with self.lock:
                 self.frame, self.error = (identity, captured, data), None
         except Exception as exc:
@@ -94,7 +94,7 @@ class CameraSource:
         frame = self.latest()
         with self.lock:
             return {'camera_status': 'live' if frame else self.control['state'],
-                    'camera_message': ('Camera actief' if frame else self.error or self.control['message']),
+                    'camera_message': ('Camera active' if frame else self.error or self.control['message']),
                     'preview_frame_id': frame[0] if frame else None,
                     'preview_age_ms': max(0, (time.time() - frame[1]) * 1000) if frame else None}
 

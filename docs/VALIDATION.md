@@ -1,29 +1,33 @@
-# Validatie van 1.0.0-rc.1
+# Validation of 1.0.0-rc.2
 
-Datum: 25 oktober 2026.
+Date: 25 October 2026.
 
-## Werkende cameraketen
+## Working camera pipeline
 
-De voorafgaande versie op het ontwikkelboard is hardwarematig gebruikt voor
-1920 × 1080 RAW10, RGB/JPEG-livebeeld, YOLOX Small QNN, automatisch starten via
-App Lab en bewaarde helderheid-/contrastregelaars. Ook het stoppen en opnieuw
-starten van de app is gecontroleerd, met dezelfde geladen CAMSS-module.
+The preceding version on the development board has been used with 1920 × 1080
+RAW10 capture, RGB/JPEG live preview, YOLOX Small QNN, automatic camera startup
+from App Lab, and persistent brightness/contrast controls. Stopping and restarting
+the app has also been checked with the same CAMSS module kept loaded.
 
-## Publiek installatiepakket
+## Public installation package
 
-- Op macOS: 27 automatische tests voor RGB-verwerking, regelaars, bootmenu's,
-  bron-/platformcontroles en installatie-/herstelgedrag in tijdelijke testmappen.
-- Dezelfde tests worden op de Ventuno Q uitgevoerd als gewone gebruiker.
-- Driverbroncode is op `6.8.0-1080-qcom` gebouwd; de module heeft de verwachte
-  `F5A7796BFE69666C456ECFB`-bronversie en passende kernel-ABI.
-- De aarch64 RGB-bibliotheek is uit de meegeleverde C-bron gebouwd.
-- Beide camera-overlays zijn opnieuw op de originele board-DTB toegepast.
-  De deltakontroles voor sensor, CAMSS, CCI-klok en behoud van andere nodes slagen.
-- De nieuw gebouwde module wordt tijdens deze pakketcontrole **niet geladen**;
-  de bestaande installatie wordt niet vervangen en GRUB wordt niet aangepast.
+- On macOS: 27 automated tests covering RGB processing, controls, boot menus,
+  source/platform checks, and installation/rollback behaviour in temporary test directories.
+- The same tests pass on the Ventuno Q as a regular user.
+- The driver source was built on `6.8.0-1080-qcom`; the module has the expected
+  `F5A7796BFE69666C456ECFB` source version and matching kernel ABI.
+- The aarch64 RGB library was built from the included C source.
+- Both camera overlays were reapplied to the original board DTB. Delta checks
+  for the sensor, CAMSS, CCI clock, and preservation of other nodes passed.
+- The newly built module was **not loaded** during package validation. The
+  existing installation was not replaced, and GRUB was not modified.
 
-Een volledige installatie vanaf een schone Ubuntu-boot en een test op een
-**tweede board** zijn nog niet uitgevoerd. Daarom is dit een release candidate.
-GitHub Actions controleert bronnen en CPU-verwerking; het vervangt geen camera-
-of QNN-hardwaretest. De geselecteerde QNN-modelvariant is gecontroleerd; de
-uitvoering op de NPU is niet afzonderlijk geprofileerd.
+RC2 translates the documentation, app interface, detection labels, and operational
+messages to English. Camera settings, driver source, and installation stages are
+unchanged. The translated package is checked with the same automated test suite.
+
+A complete installation from a fresh Ubuntu boot and a test on a **second board**
+have not yet been performed. This is therefore a release candidate. GitHub Actions
+checks source files and CPU processing; it does not replace camera or QNN hardware
+tests. The selected QNN model variant has been checked; NPU execution has not been
+profiled separately.
